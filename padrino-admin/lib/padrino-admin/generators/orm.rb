@@ -52,6 +52,7 @@ module Padrino
             when :mini_record  then @klass.columns
             when :datamapper   then @klass.properties.map { |p| dm_column(p) }
             when :couchrest    then @klass.properties
+            when :ohm          then @klass.attributes.map { |p| Column.new(p, "String") }
             when :mongoid      then @klass.fields.values
             when :mongomapper  then @klass.keys.values.reject { |key| key.name == "_id" } # On MongoMapper keys are an hash
             when :sequel       then @klass.db_schema.map { |k,v| v[:type] = :text if v[:db_type] =~ /^text/i; Column.new(k, v[:type]) }
@@ -95,6 +96,7 @@ module Padrino
           case orm
             when :activerecord, :mini_record, :mongomapper, :mongoid then "#{klass_name}.find(#{params})"
             when :datamapper, :couchrest   then "#{klass_name}.get(#{params})"
+            when :ohm then (params = 'id'.to_sym ? "#{klass_name}[#{params}]" : "#{klass_name}.find(#{params}).first")
             when :sequel then "#{klass_name}[#{params}]"
             else raise OrmError, "Adapter #{orm} is not yet supported!"
           end
@@ -118,14 +120,16 @@ module Padrino
         def update_attributes(params=nil)
           case orm
             when :activerecord, :mini_record, :mongomapper, :mongoid, :couchrest then "@#{name_singular}.update_attributes(#{params})"
-            when :datamapper then "@#{name_singular}.update(#{params})"
+            when :datamapper, :ohm then "@#{name_singular}.update(#{params})"
             when :sequel then "@#{name_singular}.modified! && @#{name_singular}.update(#{params})"
             else raise OrmError, "Adapter #{orm} is not yet supported!"
           end
         end
 
         def destroy
-          "#{name_singular}.destroy"
+          case orm
+            when :ohm then "#{name_singular}.delete"
+            else "#{name_singular}.destroy"
         end
       end # Orm
     end # Generators
